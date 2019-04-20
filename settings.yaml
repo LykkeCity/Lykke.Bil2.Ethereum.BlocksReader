@@ -1,0 +1,102 @@
+# Common settings
+
+MonitoringServiceClient:
+    MonitoringServiceUrl:
+        settings-key: MonitoringServiceUrl
+
+SlackNotifications:
+    AzureQueue:
+        ConnectionString:
+            settings-key: SlackNotificationsConnString
+            types:
+                - AzureTableStorage
+        QueueName:
+            settings-key: SlackQueueName
+
+# Blocks reader settings
+
+Db:
+    AzureDataConnString:
+        settings-key: Ethereum-AzureDataConnString
+        types:
+            - AzureTableStorage
+    LogsConnString:
+        settings-key: Ethereum-LogsConnString
+        types:
+            - AzureTableStorage
+
+RabbitMq:
+    ConnString:
+        settings-key: Ethereum-BlocksReader-RabbitConnString
+        types:
+            - RabbitMq
+
+    Vhost:
+        settings-key: Ethereum-BlocksReader-RabbitVhost
+        types:
+            - Optional
+
+# 4 by default
+
+    MessageConsumersCount:
+        settings-key: Ethereum-BlocksReader-MessageConsumersCount
+        types:
+            - Optional
+
+# 8 by default
+
+    MessageProcessorsCount:
+        settings-key: Ethereum-BlocksReader-MessageProcessorsCount
+        types:
+            - Optional
+    
+# "00:00:30" by default
+
+    DefaultFirstLevelRetryTimeout:
+        settings-key: Ethereum-BlocksReader-DefaultFirstLevelRetryTimeout
+        types:
+            - Optional
+
+# "00:10:00" by default
+
+    MaxFirstLevelRetryMessageAge:
+        settings-key: Ethereum-BlocksReader-MaxFirstLevelRetryMessageAge
+        types:
+            - Optional
+
+# 20 by default
+
+    MaxFirstLevelRetryCount:
+        settings-key: Ethereum-BlocksReader-MaxFirstLevelRetryCount
+        types:
+            - Optional
+
+# 1000 by default
+
+    FirstLevelRetryQueueCapacity:
+        settings-key: Ethereum-BlocksReader-FirstLevelRetryQueueCapacity
+        types:
+            - Optional
+
+# 500 by default
+
+    ProcessingQueueCapacity:
+        settings-key: Ethereum-BlocksReader-ProcessingQueueCapacity
+        types:
+            - Optional
+
+LastIrreversibleBlockMonitoringPeriod:
+    settings-key: Ethereum-BlocksReader-LastIrreversibleBlockMonitoringPeriod
+    types:
+        - Optional
+
+# Define specific blockchain settings below, if necessary.
+#
+# For example:
+#
+# NodeUrl:
+#   settings-key: Ethereum-NodeUrl
+# NodeUsername:
+#   settings-key: Ethereum-NodeUsername
+# NodePassword:
+#   settings-key: Ethereum-NodePassword
