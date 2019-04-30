@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Lykke.Bil2.Contract.BlocksReader.Events;
 using Lykke.Bil2.Sdk.BlocksReader.Services;
 
@@ -6,22 +6,18 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
 {
     public class IrreversibleBlockProvider : IIrreversibleBlockProvider
     {
-        public IrreversibleBlockProvider(/* TODO: Provide specific settings and dependencies, if necessary */)
+        private readonly IRpcBlocksReader _rpcBlocksReader;
+
+        public IrreversibleBlockProvider(IRpcBlocksReader rpcBlocksReader)
         {
+            _rpcBlocksReader = rpcBlocksReader;
         }
 
         public async Task<LastIrreversibleBlockUpdatedEvent> GetLastAsync()
         {
-            // TODO: retrieve last irreversible block and return its number and hash
-            //
-            // For example:
-            //
-            // var lastIrreversibleBlock = ...;
-            //
-            // return new LastIrreversibleBlockUpdatedEvent(lastIrreversibleBlock.Number, lastIrreversibleBlock.Hash);
+            var (number, blockId) = await _rpcBlocksReader.GetLastIrreversibleBlockAsync();
 
-
-            throw new System.NotImplementedException();
+            return new LastIrreversibleBlockUpdatedEvent(number, blockId);
         }
     }
 }

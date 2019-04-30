@@ -26,6 +26,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="FluidCaching" Version="1.3.2" />
     <PackageReference Include="Lykke.Bil2.Sdk.BlocksReader" Version="1.0.0-beta.19" />
+    <PackageReference Include="Nethereum.Web3" Version="3.3.0" />
+    <PackageReference Include="Polly" Version="6.1.0" />
   </ItemGroup>
 </Project>
