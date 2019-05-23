@@ -1,11 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
+VisualStudioVersion = 15.0.28307.421
+MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "1. Tests", "1. Tests", "{2F76B55E-78B9-4BDA-B1D7-13FC135FD22E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lykke.Bil2.Ethereum.BlocksReader.Tests", "tests\Lykke.Bil2.Ethereum.BlocksReader.Tests\Lykke.Bil2.Ethereum.BlocksReader.Tests.csproj", "{5F6F061B-772E-43AC-8F3C-8E14A19951EC}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Lykke.Bil2.Ethereum.BlocksReader.Tests", "tests\Lykke.Bil2.Ethereum.BlocksReader.Tests\Lykke.Bil2.Ethereum.BlocksReader.Tests.csproj", "{5F6F061B-772E-43AC-8F3C-8E14A19951EC}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lykke.Bil2.Ethereum.BlocksReader", "src\Lykke.Bil2.Ethereum.BlocksReader\Lykke.Bil2.Ethereum.BlocksReader.csproj", "{BA685ADF-13FA-4ED1-9F01-B6CD9E6B3980}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Lykke.Bil2.Ethereum.BlocksReader", "src\Lykke.Bil2.Ethereum.BlocksReader\Lykke.Bil2.Ethereum.BlocksReader.csproj", "{BA685ADF-13FA-4ED1-9F01-B6CD9E6B3980}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{990BD414-3CED-42B7-AEB2-E8AFF532DD1D}"
 	ProjectSection(SolutionItems) = preProject
@@ -13,6 +15,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		README.md = README.md
 		settings.yaml = settings.yaml
 	EndProjectSection
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Lykke.Bil2.Ethereum.BlocksReader.IntegrationTests", "tests\Lykke.Bil2.Ethereum.BlocksReader.IntegrationTests\Lykke.Bil2.Ethereum.BlocksReader.IntegrationTests.csproj", "{8ACD58ED-F4FC-4DC5-AD8C-6B684106D0DF}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -28,8 +32,19 @@ Global
 		{BA685ADF-13FA-4ED1-9F01-B6CD9E6B3980}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BA685ADF-13FA-4ED1-9F01-B6CD9E6B3980}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BA685ADF-13FA-4ED1-9F01-B6CD9E6B3980}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8ACD58ED-F4FC-4DC5-AD8C-6B684106D0DF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8ACD58ED-F4FC-4DC5-AD8C-6B684106D0DF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8ACD58ED-F4FC-4DC5-AD8C-6B684106D0DF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8ACD58ED-F4FC-4DC5-AD8C-6B684106D0DF}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{5F6F061B-772E-43AC-8F3C-8E14A19951EC} = {2F76B55E-78B9-4BDA-B1D7-13FC135FD22E}
+		{8ACD58ED-F4FC-4DC5-AD8C-6B684106D0DF} = {2F76B55E-78B9-4BDA-B1D7-13FC135FD22E}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {AC09437D-A157-4041-97C0-77B679E3E871}
 	EndGlobalSection
 EndGlobal

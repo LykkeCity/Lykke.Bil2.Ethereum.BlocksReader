@@ -6,10 +6,10 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Models
 {
     public class BlockContent
     {
-        public IEnumerable<(Base58String rawTransaction, TransferAmountTransactionExecutedEvent transferAmount)> 
+        public IEnumerable<(Base64String rawTransaction, TransferAmountExecutedTransaction transferAmount)> 
             TransferAmountTransactionExecutedEvents { get; set; }
 
-        public IEnumerable<(Base58String rawTransaction, TransactionFailedEvent failedEvent)> 
+        public IEnumerable<(Base64String rawTransaction, FailedTransaction failedEvent)> 
             TransactionFailedEvents { get; set; }
 
         public IEnumerable<AddressHistoryModel> AddressHistory { get; set; }

@@ -1,7 +1,11 @@
-﻿using Lykke.Bil2.Ethereum.BlocksReader.Extensions;
+﻿using FluidCaching;
+using Lykke.Bil2.Contract.BlocksReader.Events;
+using Lykke.Bil2.Ethereum.BlocksReader.Extensions;
+using Lykke.Bil2.Ethereum.BlocksReader.Interfaces;
 using Lykke.Bil2.Ethereum.BlocksReader.Models;
 using Lykke.Bil2.Ethereum.BlocksReader.Models.DebugModels;
 using Lykke.Bil2.SharedDomain;
+using Lykke.Numerics;
 using Nethereum.Hex.HexConvertors.Extensions;
 using Nethereum.Hex.HexTypes;
 using Nethereum.RPC.Eth.DTOs;
@@ -14,20 +18,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
-using FluidCaching;
-using Lykke.Bil2.Contract.BlocksReader.Events;
-using Lykke.Numerics;
 
 namespace Lykke.Bil2.Ethereum.BlocksReader.Services
 {
-    public interface IRpcBlocksReader
-    {
-        Task<(long lastIrreversibleBlockNumber, BlockId blockId)>
-            GetLastIrreversibleBlockAsync();
-
-        Task<BlockContent> ReadBlockAsync(BigInteger blockHeight);
-    }
-
     public class RpcBlocksReader : IRpcBlocksReader
     {
         private readonly Web3 _ethClient;
@@ -39,9 +32,9 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
         private readonly IErc20ContractIndexingService _erc20ContractIndexingService;
 
         public RpcBlocksReader(
-            string url, 
-            int confirmationBlocks, 
-            int cacheCapacity, 
+            string url,
+            int confirmationBlocks,
+            int cacheCapacity,
             IDebugDecorator debug,
             IErc20ContractIndexingService erc20ContractIndexingService)
         {
@@ -162,7 +155,7 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
                     Value = transaction.Value,
                     GasUsed = transactionReciept.GasUsed.Value,
                     ContractAddress = transactionReciept.ContractAddress,
-                    HasError = (transactionReciept.HasErrors() ?? false) 
+                    HasError = (transactionReciept.HasErrors() ?? false)
                                || (traceResult?.HasError ?? false)
                 };
 
@@ -225,7 +218,7 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
             };
 
             var transferLogs = await logs.SendRequestAsync(filter);
-            var transfers = transferLogs
+            var erc20TransferHistory = transferLogs
                 .Where(x => x.Topics.Length == 3)
                 .Select(x =>
                 {
@@ -253,24 +246,25 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
 
             #endregion
 
+            var internalMessagesLookup = internalMessages.ToLookup(x => x.TransactionHash);
+            var erc20TransferHistoryLookup = erc20TransferHistory.ToLookup(x => x.TransactionHash);
             var transactions = blockTransactions?.Select(x => x.Value).ToList();
-            List<TransferAmountTransactionExecutedEvent> transferEvents = 
-                new List<TransferAmountTransactionExecutedEvent>(transactions.Count);
-            List<TransactionFailedEvent> failedEvents = new List<TransactionFailedEvent>(transactions.Count);
-
-            foreach (var transaction in transactions)
-            {
-                
-            }
+            var extractedEvents = await ExtractAddressHistoryAsDictAsync(
+                blockModel,
+                transactions,
+                internalMessagesLookup,
+                erc20TransferHistoryLookup);
 
             return new BlockContent
             {
+                TransferAmountTransactionExecutedEvents = extractedEvents.TransferEvents,
+                TransactionFailedEvents = extractedEvents.FailedEvents,
                 AddressHistory = addressHistory,
                 BlockModel = blockModel,
                 DeployedContracts = deployedContracts,
                 InternalMessages = internalMessages,
                 Transactions = blockTransactions?.Select(x => x.Value).ToList(),
-                Transfers = transfers,
+                Transfers = erc20TransferHistory,
                 RawBlock = rawBlock
             };
         }
@@ -321,23 +315,24 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
             return history;
         }
 
-        private async Task<(IEnumerable<TransferAmountTransactionExecutedEvent> TransferEvents,
-            IEnumerable<TransactionFailedEvent> FailedEvents)> ExtractAddressHistoryAsDictAsync(
+        private async Task<(IEnumerable<(Base64String rawTransaction, TransferAmountExecutedTransaction transaction)> TransferEvents,
+            IEnumerable<(Base64String rawTransaction, FailedTransaction failedTransaction)> FailedEvents)> ExtractAddressHistoryAsDictAsync(
             BlockModel blockModel,
-            Dictionary<string, IEnumerable<InternalMessageModel>> internalMessagesDict,
-            Dictionary<string, TransactionModel> blockTransactionsDict,
-            Dictionary<string, IEnumerable<Erc20TransferHistoryModel>> erc20TransferHistoryDict)
+            IEnumerable<TransactionModel> blockTransactions,
+            ILookup<string, InternalMessageModel> internalMessagesDict,
+            ILookup<string, Erc20TransferHistoryModel> erc20TransferHistoryDict)
         {
             BlockId blockId = blockModel.BlockHash;
-            List<TransferAmountTransactionExecutedEvent> transferEvents =
-                new List<TransferAmountTransactionExecutedEvent>(blockTransactionsDict.Count);
-            List<TransactionFailedEvent> failedEvents = new List<TransactionFailedEvent>(blockTransactionsDict.Count);
+            var blockTransactionsArray = blockTransactions?.ToArray() ?? new TransactionModel[0];
+            List<(Base64String rawTransaction, TransferAmountExecutedTransaction transaction)> transferEvents =
+                new List<(Base64String rawTransaction, TransferAmountExecutedTransaction transaction)>(blockTransactionsArray.Length);
+            List<(Base64String rawTransaction, FailedTransaction failedTransaction)> failedEvents = 
+                new List<(Base64String rawTransaction, FailedTransaction failedTransaction)>(blockTransactionsArray.Length);
 
-            foreach (var transactionKeyValue in blockTransactionsDict)
+            foreach (var transaction in blockTransactionsArray)
             {
-                var transactionHash = transactionKeyValue.Key;
+                var transactionHash = transaction.TransactionHash;
                 var transactionId = new TransactionId(transactionHash);
-                var transaction = transactionKeyValue.Value;
                 var calculatedGasCost = transaction.GasPrice * transaction.GasUsed;
                 var fees = new Fee[]
                 {
@@ -348,17 +343,17 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
                 if (!transaction.HasError)
                 {
                     List<BalanceChange> balanceChanges = new List<BalanceChange>();
-                    
+
                     var senderBalanceChange = -(transaction.Value + calculatedGasCost);
                     var receiverBalanceChange = transaction.Value;
                     balanceChanges.Add(new BalanceChange(
-                        "transaction",
+                        transactionHash,
                         Assets.Assets.EthAsset,
                         Money.Create(-senderBalanceChange, 18),
                         new Address(transaction.From)));
 
                     balanceChanges.Add(new BalanceChange(
-                        "transaction",
+                        transactionHash,
                         Assets.Assets.EthAsset,
                         Money.Create(receiverBalanceChange, 18),
                         new Address(transaction.From)));
@@ -366,68 +361,66 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
 
                     if (internalMessagesDict != null)
                     {
-                        if (internalMessagesDict.TryGetValue(transactionHash, out var internalMessages))
-                        {
-                            foreach (var message in internalMessages)
-                            {
-                                balanceChanges.Add(new BalanceChange(
-                                    message.MessageIndex.ToString(),
-                                    Assets.Assets.EthAsset,
-                                    Money.Create(-message.Value, 18),
-                                    new Address(message.FromAddress)));
+                        var internalMessages = internalMessagesDict[transactionHash];
 
-                                balanceChanges.Add(new BalanceChange(
-                                    message.MessageIndex.ToString(),
-                                    Assets.Assets.EthAsset,
-                                    Money.Create(message.Value, 18),
-                                    new Address(message.ToAddress)));
-                            }
+                        foreach (var message in internalMessages)
+                        {
+                            balanceChanges.Add(new BalanceChange(
+                                $"{transactionHash}:{message.MessageIndex}",
+                                Assets.Assets.EthAsset,
+                                Money.Create(-message.Value, 18),
+                                new Address(message.FromAddress)));
+
+                            balanceChanges.Add(new BalanceChange(
+                                $"{transactionHash}:{message.MessageIndex}",
+                                Assets.Assets.EthAsset,
+                                Money.Create(message.Value, 18),
+                                new Address(message.ToAddress)));
                         }
                     }
 
                     if (erc20TransferHistoryDict != null)
                     {
-                        if (erc20TransferHistoryDict.TryGetValue(transactionHash, out var erc20TransferHistory))
+                        var erc20TransferHistory = erc20TransferHistoryDict[transactionHash];
+
+                        foreach (var erc20Transfer in erc20TransferHistory)
                         {
-                            foreach (var erc20Transfer in erc20TransferHistory)
-                            {
-                                var assetInfo = await _indexByAddress.GetItem(erc20Transfer.ContractAddress,
-                                    async (address) => await _erc20ContractIndexingService.GetContractAssetInfoAsync(address));
+                            var assetInfo = await _indexByAddress.GetItem(erc20Transfer.ContractAddress,
+                                async (address) => await _erc20ContractIndexingService.GetContractAssetInfoAsync(address));
 
-                                balanceChanges.Add(new BalanceChange(
-                                    erc20Transfer.LogIndex.ToString(),
-                                    assetInfo.Asset,
-                                    Money.Create(-erc20Transfer.TransferAmount, assetInfo.Scale),
-                                    new Address(erc20Transfer.From)));
+                            balanceChanges.Add(new BalanceChange(
+                                $"{transactionHash}:log:{erc20Transfer.LogIndex}",
+                                assetInfo.Asset,
+                                Money.Create(-erc20Transfer.TransferAmount, assetInfo.Scale),
+                                new Address(erc20Transfer.From)));
 
-                                balanceChanges.Add(new BalanceChange(
-                                    erc20Transfer.LogIndex.ToString(),
-                                    assetInfo.Asset,
-                                    Money.Create(erc20Transfer.TransferAmount, assetInfo.Scale),
-                                    new Address(erc20Transfer.To)));
-                            }
+                            balanceChanges.Add(new BalanceChange(
+                                $"{transactionHash}:log:{erc20Transfer.LogIndex}",
+                                assetInfo.Asset,
+                                Money.Create(erc20Transfer.TransferAmount, assetInfo.Scale),
+                                new Address(erc20Transfer.To)));
                         }
                     }
 
-                    var transferEvent = new TransferAmountTransactionExecutedEvent(blockId,
+                    var transferEvent = new TransferAmountExecutedTransaction(
                         transaction.TransactionIndex,
-                        transactionId, 
+                        transactionId,
                         balanceChanges,
                         fees);
 
-                    transferEvents.Add(transferEvent);
+                    transferEvents.Add((Base64String.Encode(""), transferEvent));
                 }
-                //failed transaction
+                // failed transaction
                 else
                 {
-                    var failedEvent = new TransactionFailedEvent(blockId,
+                    var failedEvent = new FailedTransaction(
                         transaction.TransactionIndex,
                         transactionId,
                         TransactionBroadcastingError.FeeTooLow,//TODO: Pick up right status for failed tx
                         "",
                         fees);
 
-                    failedEvents.Add(failedEvent);
+                    failedEvents.Add((Base64String.Encode(""), failedEvent));
                 }
             }
 

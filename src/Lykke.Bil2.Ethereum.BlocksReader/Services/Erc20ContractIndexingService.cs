@@ -28,7 +28,9 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
             string symbol = null;
             var ethereumContract = _web3.Eth.GetContract(MetadataAbi, address);
 
-            await TryCallFunction(ethereumContract, "symbol", out symbol);
+            var symbalCallResult = await TryCallFunction<string>(ethereumContract, "symbol");
+            symbol = symbalCallResult.Item2;
+
             if (!string.IsNullOrEmpty(symbol))
             {
                 asset = new Asset(new AssetId(symbol), new AssetAddress(address));
@@ -38,9 +40,10 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
                 asset = new Asset(new AssetId(address), new AssetAddress(address));
             }
 
-            if (await TryCallFunction(ethereumContract, "decimals", out uint decimals))
+            var decimalsCallResult = await TryCallFunction<uint>(ethereumContract, "decimals");
+            if (decimalsCallResult.Item1)
             {
-                scale = (int)decimals;
+                scale = (int)decimalsCallResult.Item2;
             }
 
             var assetInfo = new AssetInfo(asset, scale);
@@ -48,19 +51,19 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
             return assetInfo;
         }
 
-        private static async Task<bool> TryCallFunction<T>(Nethereum.Contracts.Contract contract, string name, out T result)
+        private static async Task<(bool, T)> TryCallFunction<T>(Nethereum.Contracts.Contract contract, string name)
         {
-            result = default(T);
+            var result = default(T);
 
             try
             {
                 result = await contract.GetFunction(name).CallAsync<T>();
 
-                return true;
+                return (true, result);
             }
             catch (Exception)
             {
-                return false;
+                return (false, result);
             }
         }
     }
