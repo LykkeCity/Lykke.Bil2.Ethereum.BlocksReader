@@ -102,8 +102,17 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
             var transactionIndex = 0;
             foreach (var transaction in block.Transactions)
             {
-                var transactionReciept =
-                    await _ethClient.Eth.Transactions.GetTransactionReceipt.SendRequestAsync(transaction.TransactionHash);
+                TransactionReceipt transactionReciept = null;
+
+                await _retryPolicy.ExecuteAsync(async () =>
+                {
+                    transactionReciept = await _ethClient.Eth.Transactions.GetTransactionReceipt.SendRequestAsync(transaction.TransactionHash);
+                });
+
+                if (transactionReciept == null)
+                {
+                    throw new Exception($"Block is not valid {blockHeight}");
+                }
 
                 #region InternalMessages
 
@@ -131,34 +140,37 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
                     List<BalanceChange> balanceChanges = new List<BalanceChange>();
 
                     var senderBalanceChange = -(transaction.Value + calculatedGasCost);
-                    var receiverBalanceChange = transaction.Value;
+                    var receiverBalanceChange = transaction.Value.Value;
+
                     balanceChanges.Add(new BalanceChange(
-                        transactionHash,
+                        "value",
                         Assets.Assets.EthAsset,
-                        new UMoney(-senderBalanceChange, 18),
+                        new Money(-senderBalanceChange, 18),
                         new Address(transaction.From)));
 
-                    balanceChanges.Add(new BalanceChange(
-                        transactionHash,
-                        Assets.Assets.EthAsset,
-                        new UMoney(receiverBalanceChange, 18),
-                        new Address(transaction.To)));
-
+                    if (!string.IsNullOrEmpty(transaction.To))
+                    {
+                        balanceChanges.Add(new BalanceChange(
+                            "value",
+                            Assets.Assets.EthAsset,
+                            new Money(receiverBalanceChange, 18),
+                            new Address(transaction.To)));
+                    }
 
                     if (traceResult != null && !traceResult.HasError && traceResult.Transfers != null)
                     {
                         foreach (var message in traceResult.Transfers)
                         {
                             balanceChanges.Add(new BalanceChange(
-                                $"{transactionHash}:{message.MessageIndex}",
+                                $"{message.MessageIndex}",
                                 Assets.Assets.EthAsset,
-                                new UMoney(-message.Value, 18),
+                                new Money(-message.Value, 18),
                                 new Address(message.FromAddress)));
 
                             balanceChanges.Add(new BalanceChange(
                                 $"{transactionHash}:{message.MessageIndex}",
                                 Assets.Assets.EthAsset,
-                                new UMoney(message.Value, 18),
+                                new Money(message.Value, 18),
                                 new Address(message.ToAddress)));
                         }
                     }
@@ -195,15 +207,15 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
                                 async (address) => await _erc20ContractIndexingService.GetContractAssetInfoAsync(address));
 
                             balanceChanges.Add(new BalanceChange(
-                                $"{transactionHash}:log:{erc20Transfer.LogIndex.Value}",
+                                $"log:{erc20Transfer.LogIndex.Value}",
                                 assetInfo.Asset,
-                                new UMoney(-transferAmount, assetInfo.Scale),
+                                new Money(-transferAmount, assetInfo.Scale),
                                 new Address(from)));
 
                             balanceChanges.Add(new BalanceChange(
-                                $"{transactionHash}:log:{erc20Transfer.LogIndex}",
+                                $"log:{erc20Transfer.LogIndex}",
                                 assetInfo.Asset,
-                                new UMoney(transferAmount, assetInfo.Scale),
+                                new Money(transferAmount, assetInfo.Scale),
                                 new Address(to)));
                         }
                     }
@@ -222,8 +234,8 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
                     var failedEvent = new FailedTransaction(
                         transactionIndex,
                         transactionId,
-                        TransactionBroadcastingError.FeeTooLow,//TODO: Pick up right status for failed tx
-                        "",
+                        TransactionBroadcastingError.Unknown,
+                        "transaction failed",
                         fees);
 
                     failedTransactions.Add((Base64String.Encode(""), failedEvent));
