@@ -97,6 +97,26 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
 
             #endregion
 
+            #region Transfers
+
+            var blockNumber = (ulong)blockHeight;
+            var filter = new NewFilterInput
+            {
+                FromBlock = new BlockParameter(blockNumber),
+                ToBlock = new BlockParameter(blockNumber),
+                Topics = new object[]
+                {
+                    "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+                }
+            };
+
+            var transferLogs = await logs.SendRequestAsync(filter);
+            var erc20TransferHistory = transferLogs
+                .Where(x => x.Topics.Length == 3)
+                .ToLookup(x => x.TransactionHash);
+
+            #endregion
+
             #region Transactions
 
             var transactionIndex = 0;
@@ -175,29 +195,10 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
                         }
                     }
 
-                    #region Transfers
-
-                    var blockNumber = (ulong)blockHeight;
-                    var filter = new NewFilterInput
+                    var erc20TransfersForTransaction = erc20TransferHistory[transactionHash].ToList();
+                    if (erc20TransfersForTransaction.Any())
                     {
-                        FromBlock = new BlockParameter(blockNumber),
-                        ToBlock = new BlockParameter(blockNumber),
-                        Topics = new object[]
-                        {
-                            "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
-                        }
-                    };
-
-                    var transferLogs = await logs.SendRequestAsync(filter);
-                    var erc20TransferHistory = transferLogs
-                        .Where(x => x.Topics.Length == 3)
-                        .ToList();
-
-                    #endregion
-
-                    if (erc20TransferHistory.Any())
-                    {
-                        foreach (var erc20Transfer in erc20TransferHistory)
+                        foreach (var erc20Transfer in erc20TransfersForTransaction)
                         {
                             var from = erc20Transfer.GetAddressFromTopic(1);
                             var to = erc20Transfer.GetAddressFromTopic(2);
