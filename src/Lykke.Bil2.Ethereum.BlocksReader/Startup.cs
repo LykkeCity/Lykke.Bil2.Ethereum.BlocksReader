@@ -1,4 +1,5 @@
 ﻿using JetBrains.Annotations;
+using Lykke.Bil2.Ethereum.BlocksReader.Interfaces;
 using Lykke.Bil2.Ethereum.BlocksReader.Services;
 using Lykke.Bil2.Ethereum.BlocksReader.Settings;
 using Lykke.Bil2.Sdk.BlocksReader;
@@ -6,6 +7,7 @@ using Lykke.Common;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using System;
+using System.Net.Http;
 
 namespace Lykke.Bil2.Ethereum.BlocksReader
 {
@@ -19,36 +21,47 @@ namespace Lykke.Bil2.Ethereum.BlocksReader
         {
             return services.BuildBlockchainBlocksReaderServiceProvider<AppSettings>(options =>
             {
+                options.UseTransferAmountTransactionsModel();
                 options.IntegrationName = IntegrationName;
-
-#if DEBUG
-                options.RabbitVhost = AppEnvironment.EnvInfo;
-#endif
 
                 // Register required service implementations:
 
                 options.BlockReaderFactory = ctx =>
                     new BlockReader
                     (
-                        /* TODO: Provide specific settings and dependencies, if necessary */
+                        ctx.Services.GetRequiredService<IRpcBlocksReader>()
                     );
-
-                // Register irreversible block retrieving strategy
-
-                options.AddIrreversibleBlockPulling(ctx =>
-                    new IrreversibleBlockProvider
-                    (
-                        /* TODO: Provide specific settings and dependencies, if necessary */
-                    ));
 
                 // To access settings for any purpose,
                 // usually, to register additional services like blockchain client,
                 // uncomment code below:
                 //
-                // options.UseSettings = settings =>
-                // {
-                //     services.AddSingleton<IService>(new ServiceImpl(settings.CurrentValue.ServiceSettingValue));
-                // };
+                options.UseSettings = (serviceCollection, settings) =>
+                {
+                    string ethereumUrl = settings.CurrentValue.NodeUrl;
+
+                    serviceCollection.AddHttpClient();
+
+                    serviceCollection.AddTransient<IDebugDecorator, DebugDecorator>((sp) =>
+                    {
+                        return new DebugDecorator(sp.GetRequiredService<IHttpClientFactory>(), ethereumUrl);
+                    });
+
+                    serviceCollection.AddTransient<IErc20ContractIndexingService, Erc20ContractIndexingService>((sp) =>
+                    {
+                        return new Erc20ContractIndexingService(ethereumUrl);
+                    });
+
+                    serviceCollection.AddTransient<IRpcBlocksReader, RpcBlocksReader>((sp) =>
+                    {
+                        return new RpcBlocksReader(
+                            ethereumUrl,
+                            30,
+                            100_000,
+                            sp.GetRequiredService<IDebugDecorator>(),
+                            sp.GetRequiredService<IErc20ContractIndexingService>());
+                    });
+                };
             });
         }
 

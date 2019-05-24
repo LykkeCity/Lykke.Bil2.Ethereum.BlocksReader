@@ -24,19 +24,24 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
             var block = await _rpcBlocksReader.ReadBlockAsync((BigInteger) blockNumber);
 
             if (block == null)
-                throw new Exception($"Can't get block with number {blockNumber}");
+            {
+                listener.HandleNotFoundBlock(new BlockNotFoundEvent(blockNumber));
+
+                return;
+            }
 
             var blockId = new BlockId(block.BlockModel.BlockHash);
+            var rawBlockBytes = block.RawBlock.ToBytes();
             var blockTime = UnixTimeStampToDateTime((double)block.BlockModel.Timestamp);
             listener.HandleRawBlock(
-                block.RawBlock.ToBytes().EncodeToBase64(),
+                rawBlockBytes.EncodeToBase64(),
                 blockId);
 
             var transactionsListener = listener.StartBlockTransactionsHandling(new BlockHeaderReadEvent(
                 blockNumber,
                 blockId,
                 blockTime,
-                0,
+                rawBlockBytes.Length,
                 block.Transactions.Count,
                 block.BlockModel.ParentHash
             ));

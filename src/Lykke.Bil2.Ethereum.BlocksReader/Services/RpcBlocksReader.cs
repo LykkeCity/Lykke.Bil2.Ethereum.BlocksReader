@@ -38,7 +38,7 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
             IDebugDecorator debug,
             IErc20ContractIndexingService erc20ContractIndexingService)
         {
-            _retryPolicy = Policy.Handle<Exception>().Retry(3);
+            _retryPolicy = Policy.Handle<Exception>().RetryAsync(3);
             _ethClient = new Web3(url);
             _debug = debug;
             _confirmationBlocks = confirmationBlocks;
@@ -336,7 +336,7 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
                 var calculatedGasCost = transaction.GasPrice * transaction.GasUsed;
                 var fees = new Fee[]
                 {
-                    new Fee(Assets.Assets.EthAsset, UMoney.Create(calculatedGasCost, 18))
+                    new Fee(Assets.Assets.EthAsset, new UMoney(calculatedGasCost, 18))
                 };
 
                 //no error case
@@ -349,14 +349,14 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
                     balanceChanges.Add(new BalanceChange(
                         transactionHash,
                         Assets.Assets.EthAsset,
-                        Money.Create(-senderBalanceChange, 18),
+                        new UMoney(-senderBalanceChange, 18),
                         new Address(transaction.From)));
 
                     balanceChanges.Add(new BalanceChange(
                         transactionHash,
                         Assets.Assets.EthAsset,
-                        Money.Create(receiverBalanceChange, 18),
-                        new Address(transaction.From)));
+                        new UMoney(receiverBalanceChange, 18),
+                        new Address(transaction.To)));
 
 
                     if (internalMessagesDict != null)
@@ -368,13 +368,13 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
                             balanceChanges.Add(new BalanceChange(
                                 $"{transactionHash}:{message.MessageIndex}",
                                 Assets.Assets.EthAsset,
-                                Money.Create(-message.Value, 18),
+                                new UMoney(-message.Value, 18),
                                 new Address(message.FromAddress)));
 
                             balanceChanges.Add(new BalanceChange(
                                 $"{transactionHash}:{message.MessageIndex}",
                                 Assets.Assets.EthAsset,
-                                Money.Create(message.Value, 18),
+                                new UMoney(message.Value, 18),
                                 new Address(message.ToAddress)));
                         }
                     }
@@ -391,13 +391,13 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
                             balanceChanges.Add(new BalanceChange(
                                 $"{transactionHash}:log:{erc20Transfer.LogIndex}",
                                 assetInfo.Asset,
-                                Money.Create(-erc20Transfer.TransferAmount, assetInfo.Scale),
+                                new UMoney(-erc20Transfer.TransferAmount, assetInfo.Scale),
                                 new Address(erc20Transfer.From)));
 
                             balanceChanges.Add(new BalanceChange(
                                 $"{transactionHash}:log:{erc20Transfer.LogIndex}",
                                 assetInfo.Asset,
-                                Money.Create(erc20Transfer.TransferAmount, assetInfo.Scale),
+                                new UMoney(erc20Transfer.TransferAmount, assetInfo.Scale),
                                 new Address(erc20Transfer.To)));
                         }
                     }

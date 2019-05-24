@@ -1,13 +1,14 @@
-﻿using System;
+﻿using Lykke.Bil2.Ethereum.BlocksReader.Models.DebugModels;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Numerics;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Numerics;
-using Lykke.Bil2.Ethereum.BlocksReader.Models.DebugModels;
 
 namespace Lykke.Bil2.Ethereum.BlocksReader.Services
 {
@@ -16,7 +17,7 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
         Task<TraceResultModel> TraceTransactionAsync(string transactionHash);
     }
 
-    public class DebugDecorator
+    public class DebugDecorator : IDebugDecorator
     {
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly string _ethereumUrl;
@@ -32,10 +33,10 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
             _httpClientFactory = httpClientFactory;
         }
 
-        //ropsten transactions
-        //0x755babb47619dc781c3ad723946b41d12c8f8c01d677c8b5ae36630a0dd91f8b - with internal contract creation
-        //0x1f8d164fef4efb88160d55d59eaab311e0e61b47eaf7364b7dc3108aceb6aa30 - with 3 internal transfers
-        //0x0ddcd11d25e196d591959a98a39c45f138ab44f2006e347d668d09ca70dfdc69 - with error
+        // ropsten transactions
+        // 0x755babb47619dc781c3ad723946b41d12c8f8c01d677c8b5ae36630a0dd91f8b - with internal contract creation
+        // 0x1f8d164fef4efb88160d55d59eaab311e0e61b47eaf7364b7dc3108aceb6aa30 - with 3 internal transfers
+        // 0x0ddcd11d25e196d591959a98a39c45f138ab44f2006e347d668d09ca70dfdc69 - with error
         public async Task<TraceResultModel> TraceTransactionAsync(string transactionHash)
         {
             /*
@@ -66,7 +67,9 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
 
             using (var parityClient = _httpClientFactory.CreateClient("parityClient"))
             {
-                HttpResponseMessage response = await parityClient.PostAsync(_ethereumUrl, new StreamContent(stream));
+                var content = new StreamContent(stream);
+                content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+                HttpResponseMessage response = await parityClient.PostAsync(_ethereumUrl, content);
                 var responseString = await response.Content.ReadAsStringAsync();
                 traceResponse = (ParityTransactionTraceResponse)
                     Newtonsoft.Json.JsonConvert.DeserializeObject(responseString, typeof(ParityTransactionTraceResponse));
