@@ -77,194 +77,168 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
             if (block == null)
                 return null;
 
+            List<(Base64String rawTransaction, TransferAmountExecutedTransaction transaction)> transferTransactions =
+                new List<(Base64String rawTransaction, TransferAmountExecutedTransaction transaction)>(block.Transactions.Length);
+            List<(Base64String rawTransaction, FailedTransaction failedTransaction)> failedTransactions =
+                new List<(Base64String rawTransaction, FailedTransaction failedTransaction)>(block.Transactions.Length);
+
             string rawBlock = Newtonsoft.Json.JsonConvert.SerializeObject(block);
-            var blockHash = block.BlockHash;
-            var blockModel = new BlockModel
-            {
-                TransactionsCount = block.Transactions.Length,
-                BlockHash = blockHash,
-                Difficulty = block.Difficulty,
-                ExtraData = block.ExtraData,
-                GasLimit = block.GasLimit,
-                GasUsed = block.GasUsed,
-                LogsBloom = block.LogsBloom,
-                Miner = block.Miner,
-                Nonce = block.Nonce,
-                Number = block.Number,
-                ParentHash = block.ParentHash,
-                ReceiptsRoot = block.ReceiptsRoot,
-                Sha3Uncles = block.Sha3Uncles,
-                Size = block.Size,
-                StateRoot = block.StateRoot,
-                Timestamp = block.Timestamp,
-                TotalDifficulty = block.TotalDifficulty,
-                TransactionsRoot = block.TransactionsRoot
-            };
+            var blockId = new BlockId(block.BlockHash);
+            var previousBlockId = new BlockId(block.ParentHash);
+            var blockTime = UnixTimeStampToDateTime((double)block.Timestamp.Value);
+            var blockHeaderReadEvent = new BlockHeaderReadEvent(
+                (long)block.Number.Value,
+                blockId,
+                blockTime,
+                (int)block.Size.Value,
+                block.Transactions.Length,
+                previousBlockId
+                );
 
             #endregion
 
             #region Transactions
 
-            var internalMessages = new List<InternalMessageModel>();
-            var blockTransactions = new Dictionary<string, TransactionModel>(block.Transactions.Length);
-
+            var transactionIndex = 0;
             foreach (var transaction in block.Transactions)
             {
                 var transactionReciept =
                     await _ethClient.Eth.Transactions.GetTransactionReceipt.SendRequestAsync(transaction.TransactionHash);
+
+                #region InternalMessages
 
                 TraceResultModel traceResult = null;
 
                 await _retryPolicy.ExecuteAsync(async () =>
                 {
                     traceResult = await _debug.TraceTransactionAsync(transaction.TransactionHash);
+                });
+
+                var hasError = (transactionReciept.HasErrors() ?? false) || (traceResult?.HasError ?? false);
+                var transactionHash = transaction.TransactionHash;
+                var transactionId = new TransactionId(transactionHash);
+                var calculatedGasCost = transaction.GasPrice.Value * transactionReciept.GasUsed.Value;
+                var fees = new Fee[]
+                {
+                    new Fee(Assets.Assets.EthAsset, new UMoney(calculatedGasCost, 18))
+                };
+
+                #endregion
+
+                //no error case
+                if (!hasError)
+                {
+                    List<BalanceChange> balanceChanges = new List<BalanceChange>();
+
+                    var senderBalanceChange = -(transaction.Value + calculatedGasCost);
+                    var receiverBalanceChange = transaction.Value;
+                    balanceChanges.Add(new BalanceChange(
+                        transactionHash,
+                        Assets.Assets.EthAsset,
+                        new UMoney(-senderBalanceChange, 18),
+                        new Address(transaction.From)));
+
+                    balanceChanges.Add(new BalanceChange(
+                        transactionHash,
+                        Assets.Assets.EthAsset,
+                        new UMoney(receiverBalanceChange, 18),
+                        new Address(transaction.To)));
+
 
                     if (traceResult != null && !traceResult.HasError && traceResult.Transfers != null)
                     {
-                        internalMessages.AddRange
-                        (
-                            traceResult.Transfers.Select(x => new InternalMessageModel
-                            {
-                                BlockNumber = block.Number.Value,
-                                Depth = x.Depth,
-                                FromAddress = x.FromAddress,
-                                MessageIndex = x.MessageIndex,
-                                ToAddress = x.ToAddress,
-                                TransactionHash = x.TransactionHash,
-                                Value = x.Value,
-                                Type = (InternalMessageModelType)x.Type,
-                                BlockTimestamp = blockModel.Timestamp
-                            })
-                        );
+                        foreach (var message in traceResult.Transfers)
+                        {
+                            balanceChanges.Add(new BalanceChange(
+                                $"{transactionHash}:{message.MessageIndex}",
+                                Assets.Assets.EthAsset,
+                                new UMoney(-message.Value, 18),
+                                new Address(message.FromAddress)));
+
+                            balanceChanges.Add(new BalanceChange(
+                                $"{transactionHash}:{message.MessageIndex}",
+                                Assets.Assets.EthAsset,
+                                new UMoney(message.Value, 18),
+                                new Address(message.ToAddress)));
+                        }
                     }
-                });
 
-                var transactionModel = new TransactionModel
-                {
-                    BlockTimestamp = block.Timestamp,
-                    BlockHash = transaction.BlockHash,
-                    BlockNumber = transaction.BlockNumber,
-                    From = transaction.From,
-                    Gas = transaction.Gas,
-                    GasPrice = transaction.GasPrice,
-                    Input = transaction.Input,
-                    Nonce = transaction.Nonce,
-                    To = transaction.To,
-                    TransactionHash = transaction.TransactionHash,
-                    TransactionIndex = (int)transaction.TransactionIndex.Value,
-                    Value = transaction.Value,
-                    GasUsed = transactionReciept.GasUsed.Value,
-                    ContractAddress = transactionReciept.ContractAddress,
-                    HasError = (transactionReciept.HasErrors() ?? false)
-                               || (traceResult?.HasError ?? false)
-                };
+                    #region Transfers
 
-                blockTransactions[transaction.TransactionHash] = transactionModel;
-            }
-
-            var addressHistory = ExtractAddressHistory(internalMessages, blockTransactions.Values);
-
-            #endregion
-
-            #region Contracts
-
-            var deployedContracts = new List<DeployedContractModel>();
-
-            foreach (var transaction in blockTransactions.Select(x => x.Value).Where(x => x.ContractAddress != null))
-            {
-                deployedContracts.Add(new DeployedContractModel
-                {
-                    Address = transaction.ContractAddress,
-                    BlockHash = blockHash,
-                    BlockNumber = block.Number.Value.ToString(),
-                    BlockTimestamp = block.Timestamp.Value.ToString(),
-                    DeployerAddress = transaction.From,
-                    TransactionHash = transaction.TransactionHash
-                });
-            }
-
-            foreach (var message in internalMessages.Where(x => x.Type == InternalMessageModelType.CREATION))
-            {
-                deployedContracts.Add(new DeployedContractModel
-                {
-                    Address = message.ToAddress,
-                    BlockHash = blockHash,
-                    BlockNumber = block.Number.Value.ToString(),
-                    BlockTimestamp = block.Timestamp.Value.ToString(),
-                    DeployerAddress = message.FromAddress,
-                    TransactionHash = message.TransactionHash
-                });
-            }
-
-            // Select contracts with distinct addresses
-            deployedContracts = deployedContracts
-                .GroupBy(x => x.Address)
-                .Select(x => x.First())
-                .ToList();
-
-            #endregion
-
-            #region Transfers
-
-            var blockNumber = (ulong)blockHeight;
-            var filter = new NewFilterInput
-            {
-                FromBlock = new BlockParameter(blockNumber),
-                ToBlock = new BlockParameter(blockNumber),
-                Topics = new object[]
-                {
-                    "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
-                }
-            };
-
-            var transferLogs = await logs.SendRequestAsync(filter);
-            var erc20TransferHistory = transferLogs
-                .Where(x => x.Topics.Length == 3)
-                .Select(x =>
-                {
-                    string trHash = x.TransactionHash;
-                    TransactionModel transaction = null;
-                    blockTransactions.TryGetValue(trHash, out transaction);
-
-                    return new Erc20TransferHistoryModel
+                    var blockNumber = (ulong)blockHeight;
+                    var filter = new NewFilterInput
                     {
-                        BlockHash = x.BlockHash,
-                        BlockNumber = (ulong)x.BlockNumber.Value,
-                        BlockTimestamp = (ulong)block.Timestamp.Value,
-                        ContractAddress = x.Address,
-                        From = x.GetAddressFromTopic(1),
-                        LogIndex = (uint)x.LogIndex.Value,
-                        To = x.GetAddressFromTopic(2),
-                        TransactionHash = trHash,
-                        TransactionIndex = (uint)x.TransactionIndex.Value,
-                        TransferAmount = x.Data.HexToBigInteger(false),
-                        GasUsed = transaction?.GasUsed ?? 0,
-                        GasPrice = transaction?.GasPrice ?? 0
+                        FromBlock = new BlockParameter(blockNumber),
+                        ToBlock = new BlockParameter(blockNumber),
+                        Topics = new object[]
+                        {
+                            "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+                        }
                     };
-                })
-                .ToList();
+
+                    var transferLogs = await logs.SendRequestAsync(filter);
+                    var erc20TransferHistory = transferLogs
+                        .Where(x => x.Topics.Length == 3)
+                        .ToList();
+
+                    #endregion
+
+                    if (erc20TransferHistory.Any())
+                    {
+                        foreach (var erc20Transfer in erc20TransferHistory)
+                        {
+                            var from = erc20Transfer.GetAddressFromTopic(1);
+                            var to = erc20Transfer.GetAddressFromTopic(2);
+                            string contractAddress = erc20Transfer.Address;
+                            var transferAmount = erc20Transfer.Data.HexToBigInteger(false);
+                            var assetInfo = await _indexByAddress.GetItem(contractAddress,
+                                async (address) => await _erc20ContractIndexingService.GetContractAssetInfoAsync(address));
+
+                            balanceChanges.Add(new BalanceChange(
+                                $"{transactionHash}:log:{erc20Transfer.LogIndex.Value}",
+                                assetInfo.Asset,
+                                new UMoney(-transferAmount, assetInfo.Scale),
+                                new Address(from)));
+
+                            balanceChanges.Add(new BalanceChange(
+                                $"{transactionHash}:log:{erc20Transfer.LogIndex}",
+                                assetInfo.Asset,
+                                new UMoney(transferAmount, assetInfo.Scale),
+                                new Address(to)));
+                        }
+                    }
+
+                    var transferEvent = new TransferAmountExecutedTransaction(
+                        transactionIndex,
+                        transactionId,
+                        balanceChanges,
+                        fees);
+
+                    transferTransactions.Add((Base64String.Encode(""), transferEvent));
+                }
+                // failed transaction
+                else
+                {
+                    var failedEvent = new FailedTransaction(
+                        transactionIndex,
+                        transactionId,
+                        TransactionBroadcastingError.FeeTooLow,//TODO: Pick up right status for failed tx
+                        "",
+                        fees);
+
+                    failedTransactions.Add((Base64String.Encode(""), failedEvent));
+                }
+
+                transactionIndex++;
+            }
 
             #endregion
-
-            var internalMessagesLookup = internalMessages.ToLookup(x => x.TransactionHash);
-            var erc20TransferHistoryLookup = erc20TransferHistory.ToLookup(x => x.TransactionHash);
-            var transactions = blockTransactions?.Select(x => x.Value).ToList();
-            var extractedEvents = await ExtractAddressHistoryAsDictAsync(
-                blockModel,
-                transactions,
-                internalMessagesLookup,
-                erc20TransferHistoryLookup);
 
             return new BlockContent
             {
-                TransferAmountTransactionExecutedEvents = extractedEvents.TransferEvents,
-                TransactionFailedEvents = extractedEvents.FailedEvents,
-                AddressHistory = addressHistory,
-                BlockModel = blockModel,
-                DeployedContracts = deployedContracts,
-                InternalMessages = internalMessages,
-                Transactions = blockTransactions?.Select(x => x.Value).ToList(),
-                Transfers = erc20TransferHistory,
+                TransferAmountTransactionExecutedEvents = transferTransactions,
+                TransactionFailedEvents = failedTransactions,
+                BlockHeaderReadEvent = blockHeaderReadEvent,
                 RawBlock = rawBlock
             };
         }

@@ -12,17 +12,7 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Models
         public IEnumerable<(Base64String rawTransaction, FailedTransaction failedEvent)> 
             TransactionFailedEvents { get; set; }
 
-        public IEnumerable<AddressHistoryModel> AddressHistory { get; set; }
-
-        public BlockModel BlockModel { get; set; }
-
-        public List<DeployedContractModel> DeployedContracts { get; set; }
-
-        public List<InternalMessageModel> InternalMessages { get; set; }
-
-        public List<TransactionModel> Transactions { get; set; }
-
-        public List<Erc20TransferHistoryModel> Transfers { get; set; }
+        public BlockHeaderReadEvent BlockHeaderReadEvent { get; set; }
 
         public string RawBlock { get; set; }
     }

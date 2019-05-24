@@ -30,21 +30,11 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
                 return;
             }
 
-            var blockId = new BlockId(block.BlockModel.BlockHash);
-            var rawBlockBytes = block.RawBlock.ToBytes();
-            var blockTime = UnixTimeStampToDateTime((double)block.BlockModel.Timestamp);
             listener.HandleRawBlock(
-                rawBlockBytes.EncodeToBase64(),
-                blockId);
+                block.RawBlock.ToBase64(),
+                block.BlockHeaderReadEvent.BlockId);
 
-            var transactionsListener = listener.StartBlockTransactionsHandling(new BlockHeaderReadEvent(
-                blockNumber,
-                blockId,
-                blockTime,
-                rawBlockBytes.Length,
-                block.Transactions.Count,
-                block.BlockModel.ParentHash
-            ));
+            var transactionsListener = listener.StartBlockTransactionsHandling(block.BlockHeaderReadEvent);
 
             if (block.TransferAmountTransactionExecutedEvents != null)
             {
