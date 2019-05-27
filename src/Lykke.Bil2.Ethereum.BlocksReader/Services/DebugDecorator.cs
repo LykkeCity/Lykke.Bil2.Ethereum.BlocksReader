@@ -133,7 +133,7 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
             if (transaction.Type == "suicide")
                 return TransferValueModelType.SUICIDE;
 
-            if (!string.IsNullOrEmpty(transaction.Result.Address) && transaction.Type == "create")
+            if (!string.IsNullOrEmpty(transaction.Result?.Address) && transaction.Type == "create")
             {
                 transaction.Action.To = string.IsNullOrEmpty(transaction.Action.To) ?
                     transaction.Result.Address : transaction.Action.To;
