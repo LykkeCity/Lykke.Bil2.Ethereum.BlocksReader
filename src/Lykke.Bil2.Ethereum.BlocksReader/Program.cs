@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using JetBrains.Annotations;
 using Lykke.Sdk;
 
@@ -10,7 +10,7 @@ namespace Lykke.Bil2.Ethereum.BlocksReader
         static async Task Main(string[] args)
         {
 #if DEBUG
-            await LykkeStarter.Start<Startup>(true, 5002);
+            await LykkeStarter.Start<Startup>(true, 5000);
 #else
             await LykkeStarter.Start<Startup>(false);
 #endif
