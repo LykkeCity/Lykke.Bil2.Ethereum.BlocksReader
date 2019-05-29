@@ -16,9 +16,9 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
         private const string MetadataAbi = @"[{""constant"":true,""inputs"":[],""name"":""name"",""outputs"":[{""name"":"""",""type"":""string""}],""payable"":false,""type"":""function""},{""constant"":true,""inputs"":[],""name"":""totalSupply"",""outputs"":[{""name"":""totalSupply"",""type"":""uint256""}],""payable"":false,""type"":""function""},{""constant"":true,""inputs"":[],""name"":""decimals"",""outputs"":[{""name"":"""",""type"":""uint8""}],""payable"":false,""type"":""function""},{""constant"":true,""inputs"":[],""name"":""symbol"",""outputs"":[{""name"":"""",""type"":""string""}],""payable"":false,""type"":""function""}]";
         private readonly IWeb3 _web3;
 
-        public Erc20ContractIndexingService(string ethereumUrl)
+        public Erc20ContractIndexingService(Web3 web3)
         {
-            _web3 = new Web3(ethereumUrl);
+            _web3 = web3;
         }
 
         public async Task<AssetInfo> GetContractAssetInfoAsync(string address)

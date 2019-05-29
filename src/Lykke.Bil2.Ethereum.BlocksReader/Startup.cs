@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Net.Http;
+using Nethereum.Web3;
 
 namespace Lykke.Bil2.Ethereum.BlocksReader
 {
@@ -39,9 +40,11 @@ namespace Lykke.Bil2.Ethereum.BlocksReader
                 options.UseSettings = (serviceCollection, settings) =>
                 {
                     string ethereumUrl = settings.CurrentValue.NodeUrl;
+                    var web3 = new Web3(ethereumUrl);
 
                     serviceCollection.AddHttpClient();
 
+                    serviceCollection.AddSingleton(web3);
                     serviceCollection.AddTransient<IDebugDecorator, DebugDecorator>((sp) =>
                     {
                         return new DebugDecorator(sp.GetRequiredService<IHttpClientFactory>(), ethereumUrl);
@@ -49,13 +52,13 @@ namespace Lykke.Bil2.Ethereum.BlocksReader
 
                     serviceCollection.AddTransient<IErc20ContractIndexingService, Erc20ContractIndexingService>((sp) =>
                     {
-                        return new Erc20ContractIndexingService(ethereumUrl);
+                        return new Erc20ContractIndexingService(sp.GetRequiredService<Web3>());
                     });
 
                     serviceCollection.AddTransient<IRpcBlocksReader, RpcBlocksReader>((sp) =>
                     {
                         return new RpcBlocksReader(
-                            ethereumUrl,
+                            sp.GetRequiredService<Web3>(),
                             30,
                             100_000,
                             sp.GetRequiredService<IDebugDecorator>(),

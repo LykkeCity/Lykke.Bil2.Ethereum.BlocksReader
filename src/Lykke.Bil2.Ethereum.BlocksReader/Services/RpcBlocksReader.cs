@@ -32,14 +32,14 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
         private readonly IErc20ContractIndexingService _erc20ContractIndexingService;
 
         public RpcBlocksReader(
-            string url,
+            Web3 web3,
             int confirmationBlocks,
             int cacheCapacity,
             IDebugDecorator debug,
             IErc20ContractIndexingService erc20ContractIndexingService)
         {
             _retryPolicy = Policy.Handle<Exception>().RetryAsync(3);
-            _ethClient = new Web3(url);
+            _ethClient = web3;
             _debug = debug;
             _confirmationBlocks = confirmationBlocks;
             _cache = new FluidCache<AssetInfo>(cacheCapacity, TimeSpan.Zero, TimeSpan.MaxValue, () => DateTime.UtcNow);
