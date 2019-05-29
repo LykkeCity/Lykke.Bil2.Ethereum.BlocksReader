@@ -181,6 +181,11 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
                     {
                         foreach (var message in traceResult.Transfers)
                         {
+                            if (message.Type == TransferValueModelType.TRANSACTION && message.Value == 0)
+                            {
+                                continue;
+                            }
+
                             balanceChanges.Add(new BalanceChange(
                                 $"{message.MessageIndex}",
                                 Assets.Assets.EthAsset,
