@@ -219,7 +219,7 @@ namespace Lykke.Bil2.Ethereum.BlocksReader.Services
                                 new Address(from)));
 
                             balanceChanges.Add(new BalanceChange(
-                                $"log:{erc20Transfer.LogIndex}",
+                                $"log:{erc20Transfer.LogIndex.Value}",
                                 assetInfo.Asset,
                                 new Money(transferAmount, assetInfo.Scale),
                                 new Address(to)));
